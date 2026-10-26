@@ -1,0 +1,40 @@
+name: seal-build
+
+# Pack-only: the test suite runs on Travis (.travis.yml).
+on:
+  workflow_dispatch: {}
+
+env:
+  NPM_CONFIG_REGISTRY: https://:2020-06-18T22%3A00%3A56.144Z@time-machines-npm.sealsecurity.io/
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '14.2.0'
+      - name: Use the publisher's npm
+        run: npm install -g npm@6.14.5
+      - name: Install devDependencies (for grunt uglify)
+        run: npm install --ignore-scripts
+      - name: Regenerate min/*.min.js from moment.js and min/*.js
+        run: ./node_modules/.bin/grunt uglify:main
+      - name: Stage the npm package (upstream release script)
+        run: bash scripts/npm_prepublish.sh 2.27.0
+      - name: Copy regenerated minified files into the staging dir
+        run: cp min/*.min.js min/*.min.js.map ../moment-npm/min/
+      - name: Pack
+        run: |
+          cd ../moment-npm
+          npm pack
+          mkdir -p "$GITHUB_WORKSPACE/seal-dist"
+          cp moment-2.27.0.tgz "$GITHUB_WORKSPACE/seal-dist/"
+          tar tzf "$GITHUB_WORKSPACE/seal-dist/moment-2.27.0.tgz" | wc -l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moment-npm
+          path: seal-dist/moment-2.27.0.tgz
+          if-no-files-found: error
